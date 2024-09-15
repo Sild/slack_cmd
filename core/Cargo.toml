@@ -1,0 +1,29 @@
+[package]
+name = "slack_cmd_core"
+version = "0.1.0"
+authors = ["Sild <sildtm@icloud.com>"]
+edition = "2021"
+keywords = ["slack", "app", "cmd", "handler"]
+readme = "../README.md"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[lib]
+name = "slack_cmd_core"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+slack-morphism.workspace =  true
+tokio.workspace =  true
+async-trait.workspace =  true
+tracing-subscriber.workspace =  true
+tracing.workspace =  true
+chrono.workspace = true
+rsb_derive.workspace =  true
+env_logger.workspace =  true
+log.workspace = true
+dashmap.workspace =  true
+clap.workspace = true
+shlex.workspace = true

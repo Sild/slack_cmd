@@ -1,0 +1,28 @@
+[package]
+name = "examples"
+authors = ["Sild <sildtm@icloud.com>"]
+repository = "https://github.com/Sild/slack_cmd"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "jira_create_ticket"
+path = "src/jira_create_ticket.rs"
+
+[[bin]]
+name = "bot_info"
+path = "src/bot_info.rs"
+
+
+[dependencies]
+tokio.workspace = true
+anyhow.workspace = true
+env_logger.workspace = true
+clap.workspace = true
+
+# internal deps
+slack_cmd_core = { path = "../core" }
+slack_cmd_handlers = { path = "../handlers" }

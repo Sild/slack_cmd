@@ -1,0 +1,26 @@
+[package]
+name = "slack_cmd_handlers"
+version = "0.1.0"
+authors = ["Sild <sildtm@icloud.com>"]
+edition = "2021"
+keywords = ["slack", "app", "cmd", "handler"]
+readme = "../README.md"
+
+[lints.clippy]
+new_ret_no_self = "allow"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[lib]
+name = "slack_cmd_handlers"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+log.workspace = true
+slack_cmd_core = { path = "../core" }
+clap.workspace = true
+shlex.workspace = true
