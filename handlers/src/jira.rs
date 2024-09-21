@@ -69,7 +69,7 @@ impl JiraHandler {
         })
     }
 
-    async fn handle_create(&self, args: &JiraHandlerArgs, msg_ev: &SlackMsgEv, bot_state: &BotState) -> Result<()> {
+    pub async fn handle_create(&self, args: &JiraHandlerArgs, msg_ev: &SlackMsgEv, bot_state: &BotState) -> Result<()> {
         let (channel, thread_ts) = extract_channel_thread(msg_ev)?;
 
         let mut args = args.clone();
