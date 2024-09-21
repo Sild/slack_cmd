@@ -11,7 +11,7 @@ pub struct BotState {
     pub bot_marker: String,
     pub bot_info: SlackBotInfo,
     pub slack_cli: Arc<dyn SlackCli>,
-    // TODO update this map if new bot was added to new channel
+    // TODO update this map if bot was added to a new channel
     pub known_channels: DashMap<SlackChannelId, String>,
     pub known_channels_rev: DashMap<String, SlackChannelId>,
     pub start_time: std::time::Instant,

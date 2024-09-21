@@ -1,13 +1,15 @@
 use crate::slack_cli::SlackCli;
+use crate::SlackMsgHist;
+use anyhow::Result;
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use slack_morphism::api::{
-    SlackApiBotsInfoRequest, SlackApiChatDeleteRequest, SlackApiChatPostMessageRequest,
-    SlackApiConversationsListRequest,
+    SlackApiBotsInfoRequest, SlackApiChatDeleteRequest, SlackApiChatGetPermalinkRequest,
+    SlackApiChatPostMessageRequest, SlackApiConversationsListRequest, SlackApiConversationsRepliesRequest,
 };
 use slack_morphism::hyper_tokio::{SlackClientHyperConnector, SlackClientHyperHttpsConnector};
 use slack_morphism::{
-    SlackApiToken, SlackBotInfo, SlackChannelId, SlackClient, SlackClientSession, SlackConversationType, SlackMessage,
+    SlackApiToken, SlackBotInfo, SlackChannelId, SlackClient, SlackClientSession, SlackConversationType,
     SlackMessageContent, SlackTs,
 };
 use std::collections::HashMap;
@@ -18,7 +20,7 @@ pub struct SlackCliImpl {
 }
 
 impl SlackCliImpl {
-    pub fn new(token: &str) -> anyhow::Result<Self> {
+    pub fn new(token: &str) -> Result<Self> {
         let client = SlackClient::new(SlackClientHyperConnector::new()?);
         Ok(Self {
             token: SlackApiToken::new(token.into()),
@@ -30,13 +32,11 @@ impl SlackCliImpl {
     pub fn get_session(&self) -> SlackClientSession<SlackClientHyperHttpsConnector> {
         self.client.open_session(&self.token)
     }
+}
 
-    async fn send_msg_impl(
-        &self,
-        channel: &SlackChannelId,
-        thread_ts: Option<&SlackTs>,
-        msg: &str,
-    ) -> anyhow::Result<()> {
+#[async_trait]
+impl SlackCli for SlackCliImpl {
+    async fn send_msg_impl(&self, channel: &SlackChannelId, thread_ts: Option<&SlackTs>, msg: &str) -> Result<()> {
         log::trace!("send_msg_impl: channel_id='{channel}', thread_ts='{:?}', msg='{msg}'", thread_ts);
         let mut req = SlackApiChatPostMessageRequest::new(
             format!("{}", channel).into(),
@@ -53,41 +53,52 @@ impl SlackCliImpl {
             }
         }
     }
-}
 
-#[async_trait]
-impl SlackCli for SlackCliImpl {
-    // return all messages from thread which contains msg with given msg_ts
-    // sorted by ts in ascending order (first message is the oldest)
-    async fn get_thread(&self, _channel: &SlackChannelId, _msg_ts: &SlackTs) -> anyhow::Result<Vec<SlackMessage>> {
-        Ok(vec![])
-    }
-
-    async fn get_message(&self, _channel: &SlackChannelId, _msg_ts: &SlackTs) -> anyhow::Result<()> {
-        let _session = self.client.open_session(&self.token);
-        todo!();
-    }
-
-    async fn delete_msg(&self, channel: &SlackChannelId, msg_ts: &SlackTs) -> anyhow::Result<()> {
-        let req = SlackApiChatDeleteRequest::new(channel.clone(), msg_ts.clone());
-        match self.get_session().chat_delete(&req).await {
-            Ok(_) => Ok(()),
+    async fn get_permalink(&self, channel: &SlackChannelId, msg_ts: &SlackTs) -> Result<String> {
+        let req = SlackApiChatGetPermalinkRequest::new(channel.clone(), msg_ts.clone());
+        match self.get_session().chat_get_permalink(&req).await {
+            Ok(rsp) => Ok(rsp.permalink.to_string()),
             Err(err) => {
-                tracing::log::error!("Fail to delete msg from channel='{channel}' with ts='{msg_ts}, err='{:?}'", err);
                 bail!(err)
             }
         }
     }
 
-    async fn send_msg(&self, channel: &SlackChannelId, msg: &str) -> anyhow::Result<()> {
-        self.send_msg_impl(channel, None, msg).await
+    async fn get_msgs_impl(
+        &self,
+        channel: &SlackChannelId,
+        ts: &SlackTs,
+        limit: Option<u16>,
+    ) -> Result<Vec<SlackMsgHist>> {
+        let time_limits = if limit.is_some() && limit.as_ref().unwrap() == &1 {
+            Some(ts.clone())
+        } else {
+            None
+        };
+        let req = SlackApiConversationsRepliesRequest {
+            channel: channel.clone(),
+            ts: ts.clone(),
+            cursor: None,
+            latest: time_limits.clone(),
+            limit,
+            oldest: time_limits.clone(),
+            inclusive: Some(true),
+        };
+        Ok(self.get_session().conversations_replies(&req).await?.messages)
     }
 
-    async fn send_reply(&self, channel: &SlackChannelId, thread_ts: &SlackTs, msg: &str) -> anyhow::Result<()> {
-        self.send_msg_impl(channel, Some(thread_ts), msg).await
+    async fn delete_msg(&self, channel: &SlackChannelId, msg_ts: &SlackTs) -> Result<()> {
+        let req = SlackApiChatDeleteRequest::new(channel.clone(), msg_ts.clone());
+        match self.get_session().chat_delete(&req).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                log::warn!("Fail to delete msg from channel='{channel}' with ts='{msg_ts}, err='{:?}'", err);
+                bail!(err)
+            }
+        }
     }
 
-    async fn get_bot_info(&self) -> anyhow::Result<SlackBotInfo> {
+    async fn get_bot_info(&self) -> Result<SlackBotInfo> {
         let session = self.get_session();
         let auth_info = session.auth_test().await?;
         let rsp =
@@ -101,7 +112,7 @@ impl SlackCli for SlackCliImpl {
         }
     }
 
-    async fn get_known_channels(&self) -> anyhow::Result<HashMap<SlackChannelId, String>> {
+    async fn get_known_channels(&self) -> Result<HashMap<SlackChannelId, String>> {
         let mut result = HashMap::new();
         let session = self.get_session();
         let mut req = SlackApiConversationsListRequest {

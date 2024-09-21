@@ -10,12 +10,8 @@ license.workspace = true
 version.workspace = true
 
 [[bin]]
-name = "jira_create_ticket"
-path = "src/jira_create_ticket.rs"
-
-[[bin]]
-name = "bot_info"
-path = "src/bot_info.rs"
+name = "handlers_example"
+path = "src/handlers_example.rs"
 
 
 [dependencies]

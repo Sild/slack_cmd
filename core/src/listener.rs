@@ -64,8 +64,6 @@ async fn push_events_dispatcher(
     _client: Arc<SlackHyperClient>,
     state: SlackClientEventsUserState,
 ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
-    log::trace!("got new push event: {:#?}", &event);
-
     // process only messages here
     let message = match &event.event {
         SlackEventCallbackBody::Message(event) if event.subtype.is_none() => event,
@@ -88,6 +86,8 @@ async fn push_events_dispatcher(
         log::trace!("event was ignored as non-related to the bot");
         return Ok(());
     }
+
+    log::debug!("got new push event: {:?}", &event);
 
     let msg_body = msg_body.strip_prefix(&bot_state.bot_marker).unwrap().trim();
     let (channel_id, thread_ts) = extract_channel_thread(message)?;

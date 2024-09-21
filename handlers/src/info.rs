@@ -24,15 +24,19 @@ impl MsgHandler for InfoHandler {
 
         let uptime = bot_state.start_time.elapsed();
 
-        let known_channels =
-            bot_state.known_channels.iter().map(|item| item.value().clone()).collect::<Vec<_>>().join("\n");
+        let known_channels = bot_state
+            .known_channels
+            .iter()
+            .map(|item| format!("  - `{}`", item.value()))
+            .collect::<Vec<_>>()
+            .join("\n");
 
         let response = format!(
             "Bot info:\n\
-        - Bot user_id: {}\n\
-        - Bot user_name: {}\n\
-        - Uptime: {:?}\n\
-        - Known channels:\n{}",
+        • Bot user_id: `{}`\n\
+        • Bot user_name: `{}`\n\
+        • Uptime: {:?}\n\
+        • Known channels:\n{}",
             bot_state.bot_info.user_id.as_ref().unwrap_or(&"N/A".to_string()),
             bot_state.bot_info.name,
             uptime,
@@ -43,7 +47,7 @@ impl MsgHandler for InfoHandler {
 }
 
 impl InfoHandler {
-    pub fn new() -> ArcMsgHandler {
+    pub fn make() -> ArcMsgHandler {
         Arc::new(Self {})
     }
 }
