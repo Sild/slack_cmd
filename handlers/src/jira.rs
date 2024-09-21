@@ -69,7 +69,7 @@ impl JiraHandler {
         })
     }
 
-    pub async fn handle_create(&self, args: &JiraHandlerArgs, msg_ev: &SlackMsgEv, bot_state: &BotState) -> Result<()> {
+    async fn handle_create(&self, args: &JiraHandlerArgs, msg_ev: &SlackMsgEv, bot_state: &BotState) -> Result<()> {
         let (channel, thread_ts) = extract_channel_thread(msg_ev)?;
 
         let mut args = args.clone();
@@ -93,67 +93,72 @@ impl JiraHandler {
         }
         let slack_msg_link = bot_state.slack_cli.get_permalink(&channel, &thread_ts).await?;
 
-        let issue_url = self.create_issue(&args, &slack_msg_link).await?;
+        let issue_url = create_issue(&self.host, &self.user, &self.token, &args, &slack_msg_link).await?;
         let msg = format!("Issue created: {issue_url}");
         bot_state.slack_cli.send_reply(&channel, &thread_ts, &msg).await
     }
+}
 
-    async fn create_issue(&self, args: &JiraHandlerArgs, slack_msg_link: &str) -> Result<String> {
-        let url = format!("{}/rest/api/3/issue", self.host);
-        let empty_description = String::from("No description provided");
-        let body = json!({
-            "fields": {
-                "project": {
-                    "key": args.project.to_uppercase()
-                },
-                "summary": args.title,
-                "description": {
-                "content": [
+pub async fn create_issue(
+    host: &str,
+    user: &str,
+    token: &str,
+    args: &JiraHandlerArgs,
+    slack_msg_link: &str,
+) -> Result<String> {
+    let url = format!("{}/rest/api/3/issue", host);
+    let empty_description = String::from("No description provided");
+    let body = json!({
+        "fields": {
+            "project": {
+                "key": args.project.to_uppercase()
+            },
+            "summary": args.title,
+            "description": {
+            "content": [
+                {
+                  "content": [
                     {
-                      "content": [
+                      "text": args.description.as_ref().unwrap_or(&empty_description),
+                      "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "text": "[Slack message link]",
+                        "marks": [
                         {
-                          "text": args.description.as_ref().unwrap_or(&empty_description),
-                          "type": "text"
-                        },
-                        {
-                            "type": "text",
-                            "text": "[Slack message link]",
-                            "marks": [
-                            {
-                                "type": "link",
-                                "attrs": {
-                                    "href": slack_msg_link
-                                }
+                            "type": "link",
+                            "attrs": {
+                                "href": slack_msg_link
                             }
-                            ]
                         }
-                      ],
-                      "type": "paragraph"
+                        ]
                     }
-                ],
-              "type": "doc",
-              "version": 1
+                  ],
+                  "type": "paragraph"
+                }
+            ],
+          "type": "doc",
+          "version": 1
+        },
+            "issuetype": {
+                "name": "Task"
             },
-                "issuetype": {
-                    "name": "Task"
-                },
-            },
-            "update": {},
-        });
-        log::debug!("creating jira issue: url={}, body={:?}", url, body.to_string());
+        },
+        "update": {},
+    });
+    log::debug!("creating jira issue: url={}, body={:?}", url, body.to_string());
 
-        let rsp =
-            reqwest::Client::new().post(&url).json(&body).basic_auth(&self.user, Some(&self.token)).send().await?;
+    let rsp = reqwest::Client::new().post(&url).json(&body).basic_auth(user, Some(&token)).send().await?;
 
-        let status = rsp.status();
-        let response: Value = serde_json::from_str(&rsp.text().await?)?;
-        log::debug!("jira issue created: status={}, response={}", status, response.to_string());
-        if status.is_success() {
-            let issue_key = response["key"].as_str().unwrap();
-            let issue_url = format!("{}/browse/{}", self.host, issue_key);
-            Ok(issue_url)
-        } else {
-            bail!("Jira API call error: status: {}, msg: {}", status, response.to_string());
-        }
+    let status = rsp.status();
+    let response: Value = serde_json::from_str(&rsp.text().await?)?;
+    log::debug!("jira issue created: status={}, response={}", status, response.to_string());
+    if status.is_success() {
+        let issue_key = response["key"].as_str().unwrap();
+        let issue_url = format!("{}/browse/{}", host, issue_key);
+        Ok(issue_url)
+    } else {
+        bail!("Jira API call error: status: {}, msg: {}", status, response.to_string());
     }
 }
