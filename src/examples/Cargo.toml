@@ -1,24 +1,17 @@
 [package]
 name = "slack_cmd_examples"
 publish = false
-keywords.workspace = true
-authors.workspace = true
-repository.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
-version.workspace = true
 
 [[bin]]
 name = "handlers_example"
 path = "src/handlers_example.rs"
 
-
 [dependencies]
 tokio.workspace = true
 anyhow.workspace = true
 env_logger.workspace = true
-clap.workspace = true
 
 # internal deps
 slack_cmd_core.workspace = true

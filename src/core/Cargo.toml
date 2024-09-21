@@ -1,7 +1,7 @@
 [package]
 name = "slack_cmd_core"
 publish = true
-description.workspace = true
+description = "Turns slack chat into a terminal using your own handlers"
 keywords.workspace = true
 authors.workspace = true
 repository.workspace = true

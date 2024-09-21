@@ -29,4 +29,4 @@ async fn main() -> anyhow::Result<()> {
 
 ![img.png](resources/readme/help_example.png)
 
-See [examples](examples) for more details.
+See [examples](src/examples) for more details.
