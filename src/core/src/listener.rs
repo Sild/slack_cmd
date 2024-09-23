@@ -2,13 +2,14 @@ use crate::state::BotState;
 use anyhow::Result;
 
 use crate::utils::{extract_channel_thread, extract_msg_body};
+use crate::{ArcMsgHandler, SlackMsgEv};
 use slack_morphism::prelude::{
     HttpStatusCode, SlackClientEventsListenerEnvironment, SlackClientEventsUserState, SlackClientHyperConnector,
     SlackEventCallbackBody, SlackHyperClient, SlackPushEventCallback,
 };
 use slack_morphism::{
-    SlackApiToken, SlackClient, SlackClientSocketModeConfig, SlackClientSocketModeListener,
-    SlackSocketModeListenerCallbacks,
+    SlackApiToken, SlackChannelId, SlackClient, SlackClientSocketModeConfig, SlackClientSocketModeListener,
+    SlackSocketModeListenerCallbacks, SlackTs,
 };
 use std::sync::Arc;
 
@@ -66,7 +67,7 @@ async fn push_events_dispatcher(
 ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
     // process only messages here
     let message = match &event.event {
-        SlackEventCallbackBody::Message(event) if event.subtype.is_none() => event,
+        SlackEventCallbackBody::Message(event) if event.subtype.is_none() => event.clone(),
         _ => return Ok(()),
     };
     let context_lock = state.read().await;
@@ -78,7 +79,7 @@ async fn push_events_dispatcher(
         }
     };
 
-    let msg_body = extract_msg_body(message)?;
+    let msg_body = extract_msg_body(&message)?;
 
     // ignore non-bot messages
     // TODO implement free_reply handler for the other cases
@@ -90,8 +91,8 @@ async fn push_events_dispatcher(
     log::debug!("got new push event: {:?}", &event);
 
     let msg_body = msg_body.strip_prefix(&bot_state.bot_marker).unwrap().trim();
-    let (channel_id, thread_ts) = extract_channel_thread(message)?;
-    let handler_name = msg_body.split(' ').next().unwrap_or("help");
+    let (channel_id, thread_ts) = extract_channel_thread(&message)?;
+    let handler_name = msg_body.split(' ').next().unwrap_or("help").to_string();
     let args = match shlex::split(msg_body) {
         Some(args) => args,
         None => {
@@ -100,21 +101,36 @@ async fn push_events_dispatcher(
         }
     };
 
-    if let Some(handler) = bot_state.get_msg_handler(&channel_id, handler_name) {
-        match handler.handle(&args, message, &bot_state).await {
-            Ok(_) => log::debug!("handler {} finished successfully", handler_name),
-            Err(err) => {
-                log::error!("handler failed with error: {:#?}", err);
-                bot_state
-                    .slack_cli
-                    .send_reply(&channel_id, &thread_ts, "Error occurred during handling. Check logs for details.")
-                    .await?;
-            }
-        }
+    if let Some(handler) = bot_state.get_msg_handler(&channel_id, &handler_name) {
+        tokio::spawn(async move { execute_handler(handler, args, message, bot_state, channel_id, thread_ts).await });
     } else {
-        bot_state.help_handler.handle(handler_name, message, &bot_state).await?;
+        tokio::spawn(async move {
+            if let Err(err) = bot_state.help_handler.handle(&handler_name, &message, &bot_state).await {
+                log::error!("Failed to send error message to slack: {:#?}", err);
+            }
+        });
     }
     Ok(())
+}
+
+async fn execute_handler(
+    handler: ArcMsgHandler,
+    args: Vec<String>,
+    msg_ev: SlackMsgEv,
+    bot_state: Arc<BotState>,
+    channel_id: SlackChannelId,
+    thread_ts: SlackTs,
+) {
+    match handler.handle(&args, &msg_ev, &bot_state).await {
+        Ok(_) => log::debug!("handler {} finished successfully", handler.name()),
+        Err(err) => {
+            log::error!("handler failed with error: {:#?}", err);
+            let error_slack_msg = "Error occurred during handling. Check logs for details.";
+            if let Err(err) = bot_state.slack_cli.send_reply(&channel_id, &thread_ts, error_slack_msg).await {
+                log::error!("Failed to send error message to slack: {:#?}", err);
+            }
+        }
+    }
 }
 
 fn error_handler(
