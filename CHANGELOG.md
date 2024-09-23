@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/Sild/slack_cmd/compare/slack_cmd_core-v0.0.5...slack_cmd_core-v0.0.6) - 2024-09-23
+
+### Fixed
+
+- run handlers async to return ack to slack
+
 ## [0.0.5](https://github.com/Sild/slack_cmd/compare/slack_cmd_core-v0.0.4...slack_cmd_core-v0.0.5) - 2024-09-21
 
 ### Other
